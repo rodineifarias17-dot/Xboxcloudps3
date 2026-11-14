@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build GAME folder PS3
+      - name: Build Lobby Xbox Cloud
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq gcc-powerpc64-linux-gnu python3-pip > /dev/null
@@ -13,11 +13,10 @@ jobs:
           mkdir -p game/XBOXCLOUD0/USRDIR build
           echo 'int main(){return 0;}' > /tmp/main.c
           powerpc64-linux-gnu-gcc -o game/XBOXCLOUD0/USRDIR/EBOOT.BIN /tmp/main.c
-          ls -lh game/XBOXCLOUD0/USRDIR/
           python3 << 'PY'
           import struct
           keys=[b'TITLE',b'TITLE_ID',b'CATEGORY',b'APP_VER',b'VERSION',b'PS3_SYSTEM_VER']
-          vals=[b'Xbox Cloud PS3\x00',b'XBOXCLOUD0\x00',b'HG\x00',b'01.00\x00',b'01.00\x00',b'04.4000\x00']
+          vals=[b'Xbox Cloud Lobby\x00',b'XBOXCLOUD0\x00',b'HG\x00',b'01.00\x00',b'01.00\x00',b'04.4000\x00']
           h=20+len(keys)*16+sum(len(k)+1 for k in keys)
           o=bytearray(); o+=struct.pack('<4sIIII',b'\x00PSF',0x101,len(keys),len(keys)*16+20,h)
           ok=20+len(keys)*16; ov=h
@@ -28,11 +27,29 @@ jobs:
           open('game/XBOXCLOUD0/PARAM.SFO','wb').write(o)
           print("PARAM OK")
           PY
-          python3 -c "from PIL import Image, ImageDraw; img=Image.new('RGB',(320,176),(16,124,16)); d=ImageDraw.Draw(img); d.text((80,80),'XBOX CLOUD',fill=(255,255,255)); img.save('game/XBOXCLOUD0/ICON0.PNG')"
+          python3 -c "from PIL import Image, ImageDraw; img=Image.new('RGB',(320,176),(16,124,16)); d=ImageDraw.Draw(img); d.text((60,70),'XBOX CLOUD',fill=(255,255,255)); d.text((55,95),'JOGOS GRATIS',fill=(255,255,255)); img.save('game/XBOXCLOUD0/ICON0.PNG')"
+          cat > game/XBOXCLOUD0/USRDIR/LOBBY.TXT << 'EOF'
+          XBOX CLOUD - JOGOS GRATIS
+          1. FORTNITE - Gratis sem Game Pass
+             https://www.xbox.com/play/games/fortnite
+          2. MEUS JOGOS - Logar com conta Microsoft
+             https://www.xbox.com/play
+          3. COMO JOGAR - Assista anuncio, ganhe 30min
+          EOF
+          cat > game/XBOXCLOUD0/USRDIR/index.html << 'EOF'
+          <html><head><meta charset="utf-8"><title>Xbox Cloud Lobby</title></head>
+          <body style="background:#107C10;color:white;font-family:Arial;text-align:center;padding:40px">
+          <h1>XBOX CLOUD - JOGOS GRATIS</h1>
+          <p>Escolha um jogo para jogar via streaming</p>
+          <a href="https://www.xbox.com/play/games/fortnite" style="display:block;background:white;color:#107C10;padding:20px;margin:15px;font-size:22px;text-decoration:none;border-radius:10px">FORTNITE - GRATIS SEM GAME PASS</a>
+          <a href="https://www.xbox.com/play" style="display:block;background:#222;color:white;padding:20px;margin:15px;font-size:22px;text-decoration:none;border-radius:10px">MEUS JOGOS - Entrar com conta Microsoft</a>
+          <p style="font-size:14px">Voce precisa de uma conta Microsoft gratis.<br>Fortnite: sem limite. Outros jogos: 30min com anuncio.</p>
+          </body></html>
+          EOF
           ls -lhR game/
-          cd game && zip -r ../build/XboxCloud-PS3-GAME.zip XBOXCLOUD0 && cd ..
+          cd game && zip -r ../build/XboxCloud-Lobby-PS3.zip XBOXCLOUD0 && cd ..
           ls -lh build/
       - uses: actions/upload-artifact@v4
         with:
-          name: XboxCloud-PS3-GAME
+          name: XboxCloud-Lobby-PS3
           path: build/
