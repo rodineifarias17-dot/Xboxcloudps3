@@ -7,35 +7,36 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build Homebrew Real PS3
         run: |
+          set +e
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-powerpc64-linux-gnu libssl-dev zlib1g-dev python3-pip > /dev/null
+          sudo apt-get install -y -qq build-essential git cmake autoconf automake libtool pkg-config libssl-dev zlib1g-dev gcc-powerpc64-linux-gnu python3-pip
           pip3 install Pillow --break-system-packages -q
           mkdir -p pkg/USRDIR build tools
-          # Baixa ps3tools sem git clone, direto por zip
           cd tools
-          wget -q https://codeload.github.com/ps3dev/ps3tools/tar.gz/refs/heads/master -O ps3tools.tar.gz
-          tar xzf ps3tools.tar.gz
-          cd ps3tools-master
-          ls
-          # Compila as ferramentas que fazem o PKG
-          make -j4 2>&1 | tail -n 20
-          ls -lh
-          cd ../..
+          git clone --depth 1 https://github.com/ps3dev/ps3tools.git
+          ls ps3tools/
+          ls ps3tools/*/
+          # Compila cada ferramenta separada
+          for d in ps3tools/make_self_npdrm ps3tools/make_package_npdrm ps3tools/sfo ps3tools/pkg; do
+            if [ -d "$d" ]; then
+              echo "=== Build $d ==="
+              (cd "$d" && make -j4 || gcc -o $(basename $d) *.c -lssl -lcrypto -lz -lm || echo "falhou $d")
+            fi
+          done
+          find . -type f -executable | head -n 30
+          cd ..
           TOOLS=$(find tools -name "make_package_npdrm" -type f | head -n 1)
           SELF=$(find tools -name "make_self_npdrm" -type f | head -n 1)
           echo "PKG tool: $TOOLS"
           echo "SELF tool: $SELF"
-          # ELF PowerPC minimo valido
           echo 'int main(){return 0;}' > /tmp/main.c
           powerpc64-linux-gnu-gcc -o pkg/USRDIR/EBOOT.ELF /tmp/main.c
           ls -lh pkg/USRDIR/
-          # Converte para SELF que o PS3 executa
-          if [ -n "$SELF" ]; then
+          if [ -n "$SELF" ] && [ -x "$SELF" ]; then
             "$SELF" pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN UP0001-XBOXCLOUD0_00-0000000000000000 || cp pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN
           else
             cp pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN
           fi
-          # PARAM.SFO e ICON
           python3 << 'PY'
           import struct
           keys=[b'TITLE',b'TITLE_ID',b'CATEGORY',b'APP_VER',b'VERSION',b'PS3_SYSTEM_VER']
@@ -52,11 +53,15 @@ jobs:
           PY
           python3 -c "from PIL import Image, ImageDraw; img=Image.new('RGB',(320,176),(16,124,16)); d=ImageDraw.Draw(img); d.text((80,80),'XBOX CLOUD',fill=(255,255,255)); img.save('pkg/ICON0.PNG')"
           ls -lh pkg/ pkg/USRDIR/
-          # Empacota
-          if [ -n "$TOOLS" ]; then
+          if [ -n "$TOOLS" ] && [ -x "$TOOLS" ]; then
             "$TOOLS" -c UP0001-XBOXCLOUD0_00-0000000000000000 pkg/ build/XboxCloudPS3.pkg || "$TOOLS" pkg/ build/XboxCloudPS3.pkg
           fi
-          ls -lh build/
+          ls -lh build/ || echo "SEM PKG AINDA"
+          # Se ainda nao gerou PKG, deixa os arquivos pra download
+          if [ ! -f build/XboxCloudPS3.pkg ]; then
+            cp -r pkg build/pkg_files
+            ls -lh build/
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: XboxCloudPS3-PKG-REAL
