@@ -9,31 +9,32 @@ jobs:
         run: |
           set +e
           sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential git cmake autoconf automake libtool pkg-config libssl-dev zlib1g-dev gcc-powerpc64-linux-gnu python3-pip
+          sudo apt-get install -y -qq build-essential git cmake autoconf automake libtool pkg-config libssl-dev zlib1g-dev libmbedtls-dev python3-pip gcc-powerpc64-linux-gnu > /dev/null
           pip3 install Pillow --break-system-packages -q
-          mkdir -p pkg/USRDIR build tools
-          cd tools
-          git clone --depth 1 https://github.com/ps3dev/ps3tools.git
-          ls ps3tools/
-          ls ps3tools/*/
-          # Compila cada ferramenta separada
-          for d in ps3tools/make_self_npdrm ps3tools/make_package_npdrm ps3tools/sfo ps3tools/pkg; do
-            if [ -d "$d" ]; then
-              echo "=== Build $d ==="
-              (cd "$d" && make -j4 || gcc -o $(basename $d) *.c -lssl -lcrypto -lz -lm || echo "falhou $d")
+          mkdir -p pkg/USRDIR build
+          git clone --depth 1 https://github.com/ps3dev/ps3tools.git tools-src
+          ls tools-src/
+          # Compila SÓ as 2 ferramentas que a gente precisa, uma por uma
+          for tool in make_self_npdrm make_package_npdrm; do
+            echo "=== BUILD $tool ==="
+            find tools-src -type d -name "*$tool*" | head
+            D=$(find tools-src -type d -name "*$tool*" | head -n 1)
+            echo "Dir: $D"
+            if [ -n "$D" ]; then
+              (cd "$D" && ls -la && (make -j4 || gcc -o $tool *.c -lssl -lcrypto -lz -lm || gcc -o $tool *.c *.cpp -lssl -lcrypto -lz -lm) ; ls -lh)
             fi
           done
-          find . -type f -executable | head -n 30
-          cd ..
-          TOOLS=$(find tools -name "make_package_npdrm" -type f | head -n 1)
-          SELF=$(find tools -name "make_self_npdrm" -type f | head -n 1)
+          find tools-src -type f -name "make_*" -executable | head -n 20
+          TOOLS=$(find tools-src -type f -name "make_package_npdrm" | head -n 1)
+          SELF=$(find tools-src -type f -name "make_self_npdrm" | head -n 1)
           echo "PKG tool: $TOOLS"
           echo "SELF tool: $SELF"
           echo 'int main(){return 0;}' > /tmp/main.c
           powerpc64-linux-gnu-gcc -o pkg/USRDIR/EBOOT.ELF /tmp/main.c
           ls -lh pkg/USRDIR/
           if [ -n "$SELF" ] && [ -x "$SELF" ]; then
-            "$SELF" pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN UP0001-XBOXCLOUD0_00-0000000000000000 || cp pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN
+            "$SELF" pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN UP0001-XBOXCLOUD0_00-0000000000000000
+            ls -lh pkg/USRDIR/
           else
             cp pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN
           fi
@@ -52,16 +53,17 @@ jobs:
           print("PARAM OK")
           PY
           python3 -c "from PIL import Image, ImageDraw; img=Image.new('RGB',(320,176),(16,124,16)); d=ImageDraw.Draw(img); d.text((80,80),'XBOX CLOUD',fill=(255,255,255)); img.save('pkg/ICON0.PNG')"
-          ls -lh pkg/ pkg/USRDIR/
+          ls -lhR pkg/
           if [ -n "$TOOLS" ] && [ -x "$TOOLS" ]; then
-            "$TOOLS" -c UP0001-XBOXCLOUD0_00-0000000000000000 pkg/ build/XboxCloudPS3.pkg || "$TOOLS" pkg/ build/XboxCloudPS3.pkg
+            "$TOOLS" -c UP0001-XBOXCLOUD0_00-0000000000000000 pkg/ build/XboxCloudPS3.pkg
+            echo "make_package exit: $?"
+          else
+            echo "ERRO: make_package_npdrm NAO ACHADO - nao vou criar pkg falso"
+            exit 1
           fi
-          ls -lh build/ || echo "SEM PKG AINDA"
-          # Se ainda nao gerou PKG, deixa os arquivos pra download
-          if [ ! -f build/XboxCloudPS3.pkg ]; then
-            cp -r pkg build/pkg_files
-            ls -lh build/
-          fi
+          ls -lh build/
+          echo "Tamanho final:"
+          wc -c build/*.pkg
       - uses: actions/upload-artifact@v4
         with:
           name: XboxCloudPS3-PKG-REAL
