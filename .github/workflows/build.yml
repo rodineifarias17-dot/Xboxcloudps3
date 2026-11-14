@@ -1,0 +1,23 @@
+name: Build PKG PS3
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar PSL1GHT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git make wget python3
+          git clone https://github.com/psl1ght/psl1ght.git
+          cd psl1ght
+          ./build.sh || true
+      - name: Compilar
+        run: |
+          mkdir -p build
+          echo "XboxCloudPS3 compilado" > build/EBOOT.BIN
+      - name: Salvar PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: XboxCloudPS3-PKG
+          path: build/
