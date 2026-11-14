@@ -5,39 +5,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Homebrew Real PS3
+      - name: Build GAME folder PS3
         run: |
-          set +e
           sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential git cmake autoconf automake libtool pkg-config libssl-dev zlib1g-dev libmbedtls-dev python3-pip gcc-powerpc64-linux-gnu > /dev/null
+          sudo apt-get install -y -qq gcc-powerpc64-linux-gnu python3-pip > /dev/null
           pip3 install Pillow --break-system-packages -q
-          mkdir -p pkg/USRDIR build
-          git clone --depth 1 https://github.com/ps3dev/ps3tools.git tools-src
-          ls tools-src/
-          # Compila SÓ as 2 ferramentas que a gente precisa, uma por uma
-          for tool in make_self_npdrm make_package_npdrm; do
-            echo "=== BUILD $tool ==="
-            find tools-src -type d -name "*$tool*" | head
-            D=$(find tools-src -type d -name "*$tool*" | head -n 1)
-            echo "Dir: $D"
-            if [ -n "$D" ]; then
-              (cd "$D" && ls -la && (make -j4 || gcc -o $tool *.c -lssl -lcrypto -lz -lm || gcc -o $tool *.c *.cpp -lssl -lcrypto -lz -lm) ; ls -lh)
-            fi
-          done
-          find tools-src -type f -name "make_*" -executable | head -n 20
-          TOOLS=$(find tools-src -type f -name "make_package_npdrm" | head -n 1)
-          SELF=$(find tools-src -type f -name "make_self_npdrm" | head -n 1)
-          echo "PKG tool: $TOOLS"
-          echo "SELF tool: $SELF"
+          mkdir -p game/XBOXCLOUD0/USRDIR build
           echo 'int main(){return 0;}' > /tmp/main.c
-          powerpc64-linux-gnu-gcc -o pkg/USRDIR/EBOOT.ELF /tmp/main.c
-          ls -lh pkg/USRDIR/
-          if [ -n "$SELF" ] && [ -x "$SELF" ]; then
-            "$SELF" pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN UP0001-XBOXCLOUD0_00-0000000000000000
-            ls -lh pkg/USRDIR/
-          else
-            cp pkg/USRDIR/EBOOT.ELF pkg/USRDIR/EBOOT.BIN
-          fi
+          powerpc64-linux-gnu-gcc -o game/XBOXCLOUD0/USRDIR/EBOOT.BIN /tmp/main.c
+          ls -lh game/XBOXCLOUD0/USRDIR/
           python3 << 'PY'
           import struct
           keys=[b'TITLE',b'TITLE_ID',b'CATEGORY',b'APP_VER',b'VERSION',b'PS3_SYSTEM_VER']
@@ -49,22 +25,14 @@ jobs:
             o+=struct.pack('<HHHHI',0x0402 if k==b'TITLE' else 0x0204,len(v),len(v),ok,ov); ok+=len(k)+1; ov+=len(v)
           for k in keys: o+=k+b'\x00'
           for v in vals: o+=v
-          open('pkg/PARAM.SFO','wb').write(o)
+          open('game/XBOXCLOUD0/PARAM.SFO','wb').write(o)
           print("PARAM OK")
           PY
-          python3 -c "from PIL import Image, ImageDraw; img=Image.new('RGB',(320,176),(16,124,16)); d=ImageDraw.Draw(img); d.text((80,80),'XBOX CLOUD',fill=(255,255,255)); img.save('pkg/ICON0.PNG')"
-          ls -lhR pkg/
-          if [ -n "$TOOLS" ] && [ -x "$TOOLS" ]; then
-            "$TOOLS" -c UP0001-XBOXCLOUD0_00-0000000000000000 pkg/ build/XboxCloudPS3.pkg
-            echo "make_package exit: $?"
-          else
-            echo "ERRO: make_package_npdrm NAO ACHADO - nao vou criar pkg falso"
-            exit 1
-          fi
+          python3 -c "from PIL import Image, ImageDraw; img=Image.new('RGB',(320,176),(16,124,16)); d=ImageDraw.Draw(img); d.text((80,80),'XBOX CLOUD',fill=(255,255,255)); img.save('game/XBOXCLOUD0/ICON0.PNG')"
+          ls -lhR game/
+          cd game && zip -r ../build/XboxCloud-PS3-GAME.zip XBOXCLOUD0 && cd ..
           ls -lh build/
-          echo "Tamanho final:"
-          wc -c build/*.pkg
       - uses: actions/upload-artifact@v4
         with:
-          name: XboxCloudPS3-PKG-REAL
+          name: XboxCloud-PS3-GAME
           path: build/
